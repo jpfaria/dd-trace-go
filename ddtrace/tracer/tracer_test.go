@@ -93,10 +93,10 @@ func TestTracerCleanStop(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < n; i++ {
-			Start(withTransport(transport))
+			Start(withTransport(transport), WithLambdaMode(true))
 			time.Sleep(time.Millisecond)
-			Start(withTransport(transport), WithSampler(NewRateSampler(0.99)))
-			Start(withTransport(transport), WithSampler(NewRateSampler(0.99)))
+			Start(withTransport(transport), WithLambdaMode(true), WithSampler(NewRateSampler(0.99)))
+			Start(withTransport(transport), WithLambdaMode(true), WithSampler(NewRateSampler(0.99)))
 		}
 	}()
 
@@ -620,9 +620,9 @@ func TestTracerEdgeSampler(t *testing.T) {
 	count := payloadQueueSize / 3
 
 	for i := 0; i < count; i++ {
-		span0 := tracer0.newRootSpan("pylons.request", "pylons", "/")
+		span0 := tracer0.StartSpan("pylons.request", SpanType("test"), ServiceName("pylons"), ResourceName("/"))
 		span0.Finish()
-		span1 := tracer1.newRootSpan("pylons.request", "pylons", "/")
+		span1 := tracer1.StartSpan("pylons.request", SpanType("test"), ServiceName("pylons"), ResourceName("/"))
 		span1.Finish()
 	}
 
@@ -1038,11 +1038,11 @@ func TestTracerReportsHostname(t *testing.T) {
 
 		name, ok := root.Meta[keyHostname]
 		assert.True(ok)
-		assert.Equal(name, tracer.hostname)
+		assert.Equal(name, tracer.config.hostname)
 
 		name, ok = child.Meta[keyHostname]
 		assert.True(ok)
-		assert.Equal(name, tracer.hostname)
+		assert.Equal(name, tracer.config.hostname)
 	})
 
 	t.Run("DD_TRACE_REPORT_HOSTNAME/unset", func(t *testing.T) {
