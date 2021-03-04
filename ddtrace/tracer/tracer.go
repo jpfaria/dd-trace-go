@@ -37,6 +37,10 @@ type tracer struct {
 	// of the behaviour of the tracer.
 	features *agentFeatures
 
+	// stats specifies the concentrator used to compute statistics, when client-side
+	// stats are enabled.
+	stats *concentrator
+
 	// traceWriter is responsible for sending finished traces to their
 	// destination, such as the Trace Agent or Datadog Forwarder.
 	traceWriter traceWriter
@@ -156,7 +160,7 @@ func newUnstartedTracer(opts ...StartOption) *tracer {
 	} else {
 		writer = newAgentTraceWriter(c, sampler)
 	}
-	return &tracer{
+	t := &tracer{
 		config:           c,
 		traceWriter:      writer,
 		out:              make(chan []*span, payloadQueueSize),
@@ -166,6 +170,8 @@ func newUnstartedTracer(opts ...StartOption) *tracer {
 		pid:              strconv.Itoa(os.Getpid()),
 		features:         &agentFeatures{},
 	}
+	t.stats = newConcentrator(t)
+	return t
 }
 
 func newTracer(opts ...StartOption) *tracer {
@@ -195,6 +201,11 @@ func newTracer(opts ...StartOption) *tracer {
 	go func() {
 		defer t.wg.Done()
 		t.reportHealthMetrics(statsInterval)
+	}()
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		t.stats.Start()
 	}()
 	return t
 }
@@ -401,14 +412,6 @@ func (t *tracer) StartSpan(operationName string, options ...ddtrace.StartSpanOpt
 	if context == nil {
 		// this is a brand new trace, sample it
 		t.sample(span)
-		if t.features.Load().DropP0s && span.Metrics[keySamplingPriority] <= 0 {
-			// the agent supports dropping P0 and below here, so do that.
-			return &internal.NoopSpan{}
-		}
-		if span.context.drop {
-			// no need to create further spans if these never reach the agent.
-			return &internal.NoopSpan{}
-		}
 	}
 	log.Debug("Started Span: %v, Operation: %s, Resource: %s, Tags: %v, %v", span, span.Name, span.Resource, span.Meta, span.Metrics)
 	return span
@@ -420,6 +423,7 @@ func (t *tracer) Stop() {
 		close(t.stop)
 		t.config.statsd.Incr("datadog.tracer.stopped", nil, 1)
 	})
+	t.stats.Stop()
 	t.wg.Wait()
 	t.traceWriter.stop()
 	t.config.statsd.Close()

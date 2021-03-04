@@ -319,6 +319,14 @@ func (s *span) finish(finishTime int64) {
 		// not sampled by local sampler
 		return
 	}
+	if t, ok := internal.GetGlobalTracer().(*tracer); ok && t.features.Load().DropP0s {
+		// the active tracer detected an agent which supports skipping traces
+		// marked as p0 and below
+		if p, ok := s.context.samplingPriority(); ok && p <= 0 {
+			// ...and this trace qualifies
+			return
+		}
+	}
 	s.context.finish()
 }
 
