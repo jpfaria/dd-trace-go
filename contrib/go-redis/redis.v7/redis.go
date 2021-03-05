@@ -10,17 +10,15 @@ package redis
 import (
 	"bytes"
 	"context"
-
 	"math"
 	"net"
 	"strconv"
 	"strings"
 
+	"github.com/go-redis/redis/v7"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
-
-	"github.com/go-redis/redis/v8"
 )
 
 type datadogHook struct {
@@ -35,7 +33,7 @@ type params struct {
 
 // NewClient returns a new Client that is traced with the default tracer under
 // the service name "redis".
-func NewClient(opt *redis.Options, opts ...ClientOption) redis.UniversalClient {
+func NewClient(opt *redis.Options, opts ...ClientOption) *redis.Client {
 	client := redis.NewClient(opt)
 	WrapClient(client, opts...)
 	return client

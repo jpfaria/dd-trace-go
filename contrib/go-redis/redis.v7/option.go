@@ -11,6 +11,10 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/internal"
 )
 
+const (
+	serviceName = "redis.client"
+)
+
 type clientConfig struct {
 	serviceName   string
 	analyticsRate float64
@@ -20,7 +24,7 @@ type clientConfig struct {
 type ClientOption func(*clientConfig)
 
 func defaults(cfg *clientConfig) {
-	cfg.serviceName = "redis.client"
+	cfg.serviceName = serviceName
 	// cfg.analyticsRate = globalconfig.AnalyticsRate()
 	if internal.BoolEnv("DD_TRACE_REDIS_ANALYTICS_ENABLED", false) {
 		cfg.analyticsRate = 1.0
