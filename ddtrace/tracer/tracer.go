@@ -170,7 +170,7 @@ func newUnstartedTracer(opts ...StartOption) *tracer {
 		pid:              strconv.Itoa(os.Getpid()),
 		features:         &agentFeatures{},
 	}
-	t.stats = newConcentrator(t)
+	t.stats = newConcentrator(c)
 	return t
 }
 

@@ -319,15 +319,55 @@ func (s *span) finish(finishTime int64) {
 		// not sampled by local sampler
 		return
 	}
-	if t, ok := internal.GetGlobalTracer().(*tracer); ok && t.features.Load().DropP0s {
-		// the active tracer detected an agent which supports skipping traces
-		// marked as p0 and below
-		if p, ok := s.context.samplingPriority(); ok && p <= 0 {
-			// ...and this trace qualifies
-			return
+	if t, ok := internal.GetGlobalTracer().(*tracer); ok {
+		// we have an active tracer
+		feats := t.features.Load()
+		if feats.Stats && shouldComputeStats(s) {
+			// the agent supports computed stats
+			var statusCode uint32
+			if sc, ok := s.Meta["http.status_code"]; ok && sc != "" {
+				if c, err := strconv.Atoi(sc); err == nil {
+					statusCode = uint32(c)
+				}
+			}
+			t.stats.In <- &spanSummary{
+				Start:      s.Start,
+				Duration:   s.Start,
+				Name:       s.Name,
+				Resource:   s.Resource,
+				Service:    s.Service,
+				Type:       s.Type,
+				Hostname:   s.Meta["keyHostname"],
+				Synthetics: strings.HasPrefix(s.Meta[keyOrigin], "synthetics"),
+				Env:        s.Meta[ext.Environment],
+				StatusCode: statusCode,
+				Version:    s.Meta["version"],
+				TopLevel:   s.Metrics[keyTopLevel] == 1,
+				Weight:     s.context.trace.weight(),
+				Error:      s.Error,
+			}
+		}
+		if feats.DropP0s {
+			// the agent supports dropping p0's in the client
+			if p, ok := s.context.samplingPriority(); ok && p <= 0 {
+				// ...and this trace qualifies
+				return
+			}
 		}
 	}
 	s.context.finish()
+}
+
+// shouldComputeStats mentions whether this span needs to have stats computed for.
+// Warning: callers must guard!
+func shouldComputeStats(s *span) bool {
+	if v, ok := s.Metrics[keyMeasured]; ok && v == 1 {
+		return true
+	}
+	if v, ok := s.Metrics[keyTopLevel]; ok && v == 1 {
+		return true
+	}
+	return false
 }
 
 // String returns a human readable representation of the span. Not for
