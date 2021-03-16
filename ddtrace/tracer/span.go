@@ -333,7 +333,7 @@ func (s *span) finish(finishTime int64) {
 			cfg := t.config
 			t.stats.In <- &spanSummary{
 				Start:      s.Start,
-				Duration:   s.Start,
+				Duration:   s.Duration,
 				Name:       s.Name,
 				Resource:   s.Resource,
 				Service:    s.Service,
