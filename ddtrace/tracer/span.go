@@ -330,6 +330,7 @@ func (s *span) finish(finishTime int64) {
 					statusCode = uint32(c)
 				}
 			}
+			cfg := t.config
 			t.stats.In <- &spanSummary{
 				Start:      s.Start,
 				Duration:   s.Start,
@@ -337,11 +338,11 @@ func (s *span) finish(finishTime int64) {
 				Resource:   s.Resource,
 				Service:    s.Service,
 				Type:       s.Type,
-				Hostname:   s.Meta["keyHostname"],
+				Hostname:   s.Meta[keyHostname],
 				Synthetics: strings.HasPrefix(s.Meta[keyOrigin], "synthetics"),
 				Env:        s.Meta[ext.Environment],
 				StatusCode: statusCode,
-				Version:    s.Meta["version"],
+				Version:    cfg.version,
 				TopLevel:   s.Metrics[keyTopLevel] == 1,
 				Weight:     s.context.trace.weight(),
 				Error:      s.Error,

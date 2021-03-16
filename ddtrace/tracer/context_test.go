@@ -7,7 +7,6 @@ package tracer
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,9 +45,7 @@ func TestSpanFromContext(t *testing.T) {
 }
 
 func TestStartSpanFromContext(t *testing.T) {
-	fmt.Println(1)
 	_, _, _, stop := startTestTracer(t)
-	fmt.Println(2)
 	defer stop()
 
 	parent := &span{context: &spanContext{spanID: 123, traceID: 456}}
@@ -76,7 +73,6 @@ func TestStartSpanFromContext(t *testing.T) {
 	assert.Equal("http.request", got.Name)
 	assert.Equal("gin", got.Service)
 	assert.Equal("/", got.Resource)
-	fmt.Println(3)
 }
 
 func TestStartSpanFromNilContext(t *testing.T) {
