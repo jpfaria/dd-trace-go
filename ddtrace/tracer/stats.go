@@ -6,7 +6,6 @@
 package tracer
 
 import (
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -106,7 +105,7 @@ func (c *concentrator) Start() {
 			select {
 			case now := <-tick.C:
 				_ = now
-				fmt.Printf("\n\nFLUSHING: %#v\n\n", c.flush(now))
+				//fmt.Printf("\n\nFLUSHING: %#v\n\n", c.flush(now))
 			case <-c.stop:
 				return
 			}
@@ -167,12 +166,7 @@ func (c *concentrator) flush(timenow time.Time) statsPayload {
 
 type rawBucket struct {
 	start, duration uint64
-	data            map[statsKey]*rawGroupedStats
-}
-
-type statsKey struct {
-	name string
-	aggr aggregation
+	data            map[aggregation]*rawGroupedStats
 }
 
 type rawGroupedStats struct {
@@ -185,7 +179,7 @@ type rawGroupedStats struct {
 	errDistribution *ddsketch.DDSketch
 }
 
-func (s *rawGroupedStats) export(k statsKey) (groupedStats, error) {
+func (s *rawGroupedStats) export(k aggregation) (groupedStats, error) {
 	msg := s.okDistribution.ToProto()
 	okSummary, err := proto.Marshal(msg)
 	if err != nil {
@@ -206,18 +200,18 @@ func (s *rawGroupedStats) export(k statsKey) (groupedStats, error) {
 		return i
 	}
 	return groupedStats{
-		Service:        k.aggr.Service,
-		Name:           k.name,
-		Resource:       k.aggr.Resource,
-		HTTPStatusCode: k.aggr.StatusCode,
-		Type:           k.aggr.Type,
+		Service:        k.Service,
+		Name:           k.Name,
+		Resource:       k.Resource,
+		HTTPStatusCode: k.StatusCode,
+		Type:           k.Type,
 		Hits:           round(s.hits),
 		Errors:         round(s.errors),
 		Duration:       round(s.duration),
 		TopLevelHits:   round(s.topLevelHits),
 		OkSummary:      okSummary,
 		ErrorSummary:   errSummary,
-		Synthetics:     k.aggr.Synthetics,
+		Synthetics:     k.Synthetics,
 	}, nil
 }
 
@@ -225,12 +219,13 @@ func newRawBucket(btime uint64) *rawBucket {
 	return &rawBucket{
 		start:    btime,
 		duration: uint64(bucketSize),
-		data:     make(map[statsKey]*rawGroupedStats),
+		data:     make(map[aggregation]*rawGroupedStats),
 	}
 }
 
 func (sb *rawBucket) handleSpan(ss *spanSummary) {
-	aggr := aggregation{
+	key := aggregation{
+		Name:       ss.Name,
 		Env:        ss.Env,
 		Type:       ss.Type,
 		Resource:   ss.Resource,
@@ -240,7 +235,6 @@ func (sb *rawBucket) handleSpan(ss *spanSummary) {
 		Version:    ss.Version,
 		Synthetics: ss.Synthetics,
 	}
-	key := statsKey{name: ss.Name, aggr: aggr}
 	gs, ok := sb.data[key]
 	if !ok {
 		gs = newRawGroupedStats()
@@ -321,6 +315,7 @@ func newRawGroupedStats() *rawGroupedStats {
 }
 
 type aggregation struct {
+	Name       string
 	Env        string
 	Type       string
 	Resource   string
