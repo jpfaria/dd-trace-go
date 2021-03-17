@@ -344,7 +344,6 @@ func (s *span) finish(finishTime int64) {
 				StatusCode: statusCode,
 				Version:    cfg.version,
 				TopLevel:   s.Metrics[keyTopLevel] == 1,
-				Weight:     s.context.trace.weight(),
 				Error:      s.Error,
 			}
 		}

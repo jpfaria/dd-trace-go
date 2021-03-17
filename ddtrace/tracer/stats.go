@@ -59,7 +59,6 @@ type spanSummary struct {
 	StatusCode      uint32
 	Version         string
 	TopLevel        bool
-	Weight          float64
 }
 
 type concentrator struct {
@@ -241,13 +240,13 @@ func (sb *rawBucket) handleSpan(ss *spanSummary) {
 		sb.data[key] = gs
 	}
 	if ss.TopLevel {
-		gs.topLevelHits += ss.Weight
+		gs.topLevelHits += 1
 	}
-	gs.hits += ss.Weight
+	gs.hits += 1
 	if ss.Error != 0 {
-		gs.errors += ss.Weight
+		gs.errors += 1
 	}
-	gs.duration += float64(ss.Duration) * ss.Weight
+	gs.duration += float64(ss.Duration)
 	// alter resolution of duration distro
 	trundur := nsTimestampToFloat(ss.Duration)
 	if ss.Error != 0 {

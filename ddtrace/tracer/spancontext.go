@@ -162,19 +162,6 @@ func newTrace() *trace {
 	return &trace{spans: make([]*span, 0, traceStartSize)}
 }
 
-// weight returns the weight of the span as defined for sampling, i.e. the
-// inverse of the sampling rate.
-func (t *trace) weight() float64 {
-	if t.root == nil {
-		return 1
-	}
-	rate, ok := t.root.Metrics[sampleRateMetricKey]
-	if !ok || rate <= 0.0 || rate > 1.0 {
-		return 1
-	}
-	return 1.0 / rate
-}
-
 func (t *trace) samplingPriority() (p int, ok bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
