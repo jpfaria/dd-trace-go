@@ -3,10 +3,15 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2016 Datadog, Inc.
 
+//go:generate msgp -unexported -marshal=false -o=stats_msgp.go -tests=false
+
 package tracer
 
 import (
+	"bytes"
+	"fmt"
 	"math/rand"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,36 +20,8 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 
 	"github.com/DataDog/sketches-go/ddsketch"
+	"github.com/tinylib/msgp/msgp"
 )
-
-type statsPayload struct {
-	Hostname string
-	Env      string
-	Version  string
-	Stats    []statsBucket
-}
-
-type statsBucket struct {
-	Start    uint64
-	Duration uint64
-	Stats    []groupedStats
-}
-
-type groupedStats struct {
-	Service        string `json:"service,omitempty"`
-	Name           string `json:"name,omitempty"`
-	Resource       string `json:"resource,omitempty"`
-	HTTPStatusCode uint32 `json:"HTTP_status_code,omitempty"`
-	Type           string `json:"type,omitempty"`
-	DBType         string `json:"DB_type,omitempty"`
-	Hits           uint64 `json:"hits,omitempty"`
-	Errors         uint64 `json:"errors,omitempty"`
-	Duration       uint64 `json:"duration,omitempty"`
-	OkSummary      []byte `json:"okSummary,omitempty"`
-	ErrorSummary   []byte `json:"errorSummary,omitempty"`
-	Synthetics     bool   `json:"synthetics,omitempty"`
-	TopLevelHits   uint64 `json:"topLevelHits,omitempty"`
-}
 
 type spanSummary struct {
 	Start, Duration int64
@@ -103,8 +80,29 @@ func (c *concentrator) Start() {
 		for {
 			select {
 			case now := <-tick.C:
-				_ = now
-				//fmt.Printf("\n\nFLUSHING: %#v\n\n", c.flush(now))
+				p := c.flush(now)
+				if len(p.Stats) == 0 {
+					// nothing to flush
+					continue
+				}
+				addr := fmt.Sprintf("http://%s/v0.5/stats", c.cfg.agentAddr)
+				var buf bytes.Buffer
+				if err := msgp.Encode(&buf, &p); err != nil {
+					log.Error("Error encoding stats payload: %v", err)
+					continue
+				}
+				req, err := http.NewRequest("POST", addr, &buf)
+				if err != nil {
+					log.Error("Error flushing stats: %v", err)
+					continue
+				}
+				// TODO: use user defined client
+				resp, err := defaultClient.Do(req)
+				if err != nil {
+					log.Error("Error flushing stats: %v", err)
+					continue
+				}
+				fmt.Printf("%#v", resp)
 			case <-c.stop:
 				return
 			}
@@ -148,6 +146,12 @@ func (c *concentrator) flush(timenow time.Time) statsPayload {
 	}
 	c.mu.Lock()
 	for ts, srb := range c.buckets {
+		// Always keep `bufferLen` buckets (default is 2: current + previous one).
+		// This is a trade-off: we accept slightly late traces (clock skew and stuff)
+		// but we delay flushing by at most `bufferLen` buckets.
+		if ts > now-int64(c.bufferLen)*bucketSize {
+			continue
+		}
 		log.Debug("Flushing bucket %d", ts)
 		sp.Stats = append(sp.Stats, srb.Export())
 		delete(c.buckets, ts)

@@ -22,6 +22,7 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/internal"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/globalconfig"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 
 	"github.com/tinylib/msgp/msgp"
 	"golang.org/x/xerrors"
@@ -330,8 +331,8 @@ func (s *span) finish(finishTime int64) {
 					statusCode = uint32(c)
 				}
 			}
-			cfg := t.config
-			t.stats.In <- &spanSummary{
+			select {
+			case t.stats.In <- &spanSummary{
 				Start:      s.Start,
 				Duration:   s.Duration,
 				Name:       s.Name,
@@ -342,9 +343,13 @@ func (s *span) finish(finishTime int64) {
 				Synthetics: strings.HasPrefix(s.Meta[keyOrigin], "synthetics"),
 				Env:        s.Meta[ext.Environment],
 				StatusCode: statusCode,
-				Version:    cfg.version,
+				Version:    t.config.version,
 				TopLevel:   s.Metrics[keyTopLevel] == 1,
 				Error:      s.Error,
+			}:
+				// ok
+			default:
+				log.Error("Stats channel full, disregarding span.")
 			}
 		}
 		if feats.DropP0s {
